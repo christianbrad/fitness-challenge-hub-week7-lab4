@@ -5,12 +5,17 @@ import com.example.FitnessChallengeApp_Test.model.WorkoutLog;
 import com.example.FitnessChallengeApp_Test.service.ChallengeService;
 import com.example.FitnessChallengeApp_Test.service.WorkoutLogService;
 import jakarta.validation.Valid;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 
 /**
  * Controller for Athlete Workout Logging.
@@ -68,10 +73,57 @@ public class WorkoutLogController {
     }
 
     @GetMapping("/workout-logs")
-    public String showWorkoutLogs(Model model) {
+    public String showWorkoutLogs(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "5") int size,
+            @RequestParam(defaultValue = "id") String sort,
+            @RequestParam(defaultValue = "DESC") String direction,
+            @RequestParam(required = false) String search,
+            @RequestParam(defaultValue = "") String filterType,
+            Model model) {
+
+        Sort.Direction sortDirection = "ASC".equalsIgnoreCase(direction) ? Sort.Direction.ASC : Sort.Direction.DESC;
+        Pageable pageable = PageRequest.of(page, size, Sort.by(sortDirection, sort));
+        Page<WorkoutLog> logPage;
+        switch (filterType) {
+            case "athlete":
+                logPage = workoutLogService.findByAthleteName(
+                        search == null ? "" : search.trim(), pageable
+                );
+                break;
+            case "calories":
+                int minCalories;
+                try {
+                    minCalories = Integer.parseInt(search);
+                } catch (NumberFormatException | NullPointerException e) {
+                    minCalories = 200;
+                }
+                logPage = workoutLogService.findByMinCalories(minCalories, pageable);
+                break;
+            case "highestCalories":
+                logPage = workoutLogService.findHighestCalorieLogs(pageable);
+                break;
+            case "intensityDuration":
+                logPage = workoutLogService.findByIntensityAndMinDuration(
+                        search == null ? "" : search.trim(), 25, pageable
+                );
+                break;
+            default:
+                logPage = workoutLogService.getLogs(pageable);
+        }
+        model.addAttribute("workoutLogs", logPage.getContent());
+        model.addAttribute("totalPages", logPage.getTotalPages());
+        model.addAttribute("totalElements", logPage.getTotalElements());
+        model.addAttribute("currentPage", page);
+        model.addAttribute("pageSize", size);
+        model.addAttribute("hasPrevious", logPage.hasPrevious());
+        model.addAttribute("hasNext", logPage.hasNext());
+        model.addAttribute("search", search == null ? "" : search);
+        model.addAttribute("sort", sort);
+        model.addAttribute("direction", sortDirection.name());
+        model.addAttribute("filterType", filterType);
         model.addAttribute("workoutLogs", workoutLogService.getAllLogs());
         model.addAttribute("pageTitle", "FitSquad Hub - Community Workout Logs");
         return "workout-logs";
     }
 }
-
